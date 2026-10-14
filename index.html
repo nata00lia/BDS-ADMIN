@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BDS Admin - Direct Message</title>
+<style>
+body{font-family:sans-serif;background:#f4f7fb;margin:0;padding:20px}
+.card{max-width:600px;margin:auto;background:white;padding:20px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.08)}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.header img{height:40px}
+.header h1{color:#0a70c0;margin:0;font-size:26px}
+label{font-weight:600;display:block;margin:12px 0 4px}
+input,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;box-sizing:border-box}
+textarea{min-height:120px}
+.toggle{display:flex;align-items:center;gap:8px;margin:16px 0}
+button{background:#0a70c0;color:white;border:none;padding:14px;width:100%;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer}
+#imageInput{display:none;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="card">
+<div class="header"><img src="logo.png"><h1>BDS</h1></div>
+<label>From Domain</label><input id="fromDomain" value="BDS <notify@bdsphilladelphia.online>">
+<label>Name</label><input id="name" placeholder="Client name">
+<label>Email</label><input id="email" type="email" placeholder="client@email.com">
+<label>Message Inbox</label><textarea id="message" placeholder="Write your direct message here..."></textarea>
+<div class="toggle"><input type="checkbox" id="enableImage" onchange="document.getElementById('imageInput').style.display=this.checked?'block':'none'"><label style="margin:0">Enable Image</label></div>
+<input type="file" id="imageInput" accept="image/*">
+<button onclick="sendMessage()">Send Direct Message</button>
+<p id="status"></p>
+</div>
+<script>
+async function sendMessage(){
+const s=document.getElementById('status');s.textContent="Sending...";
+const file=document.getElementById('imageInput').files[0];let img=null;
+if(file&&document.getElementById('enableImage').checked){img=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(file);});}
+const res=await fetch('/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:document.getElementById('fromDomain').value,name:document.getElementById('name').value,email:document.getElementById('email').value,message:document.getElementById('message').value,image:img})});
+const d=await res.json();s.textContent=d.success?"Sent! BDS will show in mailbox.":"Error: "+d.error;
+}
+</script>
+</body>
+</html>
