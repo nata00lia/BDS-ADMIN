@@ -34,7 +34,7 @@ app.post('/send-message', async (req, res) => {
   if (!to) return res.status(400).json({ error: 'Missing to field' });
   try {
     const data = await resend.emails.send({
-      from: 'BDS <noreply@bdsphiladelphia.online>',
+      from: 'BDS <noreply@bdsphilladelphia.online>',
       to: to, subject: 'Message for ' + name,
       html: '<h2>Hello '+name+',</h2><p>'+message+'</p><p>- BDS Team</p>'
     });
