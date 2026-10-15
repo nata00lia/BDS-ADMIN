@@ -3,7 +3,7 @@ const { Resend } = require('resend');
 const path = require('path');
 
 const app = express();
-const resend = new Resend('re_ewX97y6o_Ne12VeFJmv8gWodAX1z6qFKA');
+const resend = new Resend('process.env.RESEND_API_KEYS');
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
@@ -30,7 +30,7 @@ app.post('/send', async (req, res) => {
 
   try {
     await resend.emails.send({
-      from: 'BDS Admin <notify@bdsphiladelphia.online>',
+      from: 'BDS Admin <noreply@bdsphiladelphia.online>',
       to: to,
       subject: 'Message from BDS Team',
       html: html
