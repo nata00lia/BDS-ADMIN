@@ -3,43 +3,54 @@ const { Resend } = require('resend');
 const path = require('path');
 
 const app = express();
-const resend = new Resend('process.env.RESEND_API_KEYS');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(__dirname));
 
 app.post('/send', async (req, res) => {
-  const { to, name, message, image } = req.body;
+  try {
+    const { to, name, message, image } = req.body;
+    
+    console.log('Request to send to:', to);
+    
+    if (!process.env.RESEND_API_KEY) {
+      console.log('ERROR: RESEND_API_KEY missing in Render Environment');
+      return res.status(500).json({ error: 'RESEND_API_KEY not set on server' });
+    }
 
-  // This is your old RED BDS banner from screenshot
-  const html = `
-    <div style="font-family:Arial,sans-serif; max-width:600px; margin:auto; background:#ffffff; border:1px solid #eee; border-radius:16px; overflow:hidden">
-      <div style="background: linear-gradient(90deg, #5a0000 0%, #e30613 100%); padding:50px 0; text-align:center;">
-        <div style="width:110px; height:110px; border:3px solid rgba(255,255,255,0.5); border-radius:50%; margin:0 auto; display:flex; align-items:center; justify-content:center;">
-          <span style="color:white; font-size:38px; font-weight:900; letter-spacing:2px; line-height:110px;">BDS</span>
+    const html = `
+      <div style="font-family:Arial,sans-serif; max-width:600px; margin:0 auto; border:1px solid #e5e5e5; border-radius:10px; overflow:hidden;">
+        <div style="background: linear-gradient(90deg,#cc0000,#990000); padding:22px; color:white; text-align:center;">
+          <span style="font-size:40px; font-weight:900; letter-spacing:2px;">BDS</span>
+          <div style="font-size:12px; opacity:0.9; margin-top:4px; letter-spacing:3px;">PHILADELPHIA</div>
+        </div>
+        <div style="padding:30px; background:white; color:#222;">
+          <p style="font-size:16px; margin-bottom:12px;">Hi <b>${name}</b>,</p>
+          <p style="font-size:16px; line-height:1.8; white-space:pre-wrap;">${message}</p>
+          ${image ? `<div style="margin-top:24px; text-align:center;"><img src="${image}" style="max-width:100%; border-radius:8px;"/></div>` : ''}
+          <div style="margin-top:30px; padding-top:20px; border-top:1px solid #eee; font-size:12px; color:#888; text-align:center;">
+            Sent via BDS Philadelphia
+          </div>
         </div>
       </div>
-      <div style="padding:28px;">
-        <p style="font-size:16px;">Hi ${name},</p>
-        <p style="font-size:16px; line-height:1.7; white-space:pre-wrap; color:#222;">${message}</p>
-        ${image ? `<div style="margin-top:22px;"><img src="${image}" style="max-width:100%; border-radius:12px; border:1px solid #eee;" /></div>` : ''}
-        <p style="margin-top:30px; font-size:13px; color:#888;">© BDS Team</p>
-      </div>
-    </div>
-  `;
+    `;
 
-  try {
-    await resend.emails.send({
-      from: 'BDS Admin <noreply@bdsphiladelphia.online>',
+    const result = await resend.emails.send({
+      from: 'BDS <noreply@bdsphiladelphia.online>',
       to: to,
-      subject: 'Message from BDS Team',
+      subject: `Message for ${name}`,
       html: html
     });
-    res.json({ ok: true });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
+
+    console.log('Resend OK:', result);
+    res.json({ success: true, result });
+
+  } catch (err) {
+    console.error('RESEND FULL ERROR:', err);
+    res.status(500).json({ error: err.message || 'Unknown error - check Render logs' });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => console.log(`BDS Admin running on port ${PORT}`));
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`BDS Server Live on ${PORT}`));
