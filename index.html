@@ -1,122 +1,42 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BDS Philadelphia</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BDS Admin - Direct Message</title>
 <style>
-body{margin:0;font-family:Arial;background:#0f141f;color:#fff;padding:20px}
-.header{font-size:28px;font-weight:bold;margin-bottom:5px}
-.sub{color:#8a92a6;margin-bottom:15px;font-size:13px}
-.tabs{display:flex;gap:10px;margin-bottom:20px}
-.tab{flex:1;padding:12px;text-align:center;border-radius:8px;background:#1e2635;cursor:pointer;font-weight:bold;font-size:14px}
-.tab.active{background:#0a65ff}
-.card{background:#1a2233;padding:15px;border-radius:10px;margin-bottom:15px}
-label{font-size:11px;color:#8a92a6;letter-spacing:1px}
-input,textarea,select{width:100%;background:#2a3448;border:none;color:#fff;padding:12px;border-radius:8px;margin-top:6px;margin-bottom:12px;box-sizing:border-box}
-button.main{width:100%;background:#0a65ff;color:#fff;border:none;padding:14px;border-radius:8px;font-weight:bold;cursor:pointer;font-size:15px}
-.withdraw-item{background:#232e45;padding:12px;border-radius:8px;margin-bottom:10px}
-.small-btn{background:#2a3448;border:none;color:#fff;padding:6px 10px;border-radius:6px;margin-right:6px;cursor:pointer}
-.small-btn.green{background:#00c853}
-.badge{display:inline-block;padding:3px 8px;border-radius:12px;font-size:11px;background:#ff9800}
-.badge.done{background:#00c853}
+body{font-family:sans-serif;background:#f4f7fb;margin:0;padding:20px}
+.card{max-width:600px;margin:auto;background:white;padding:20px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,0.08)}
+.header{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.header img{height:40px}
+.header h1{color:#0a70c0;margin:0;font-size:26px}
+label{font-weight:600;display:block;margin:12px 0 4px}
+input,textarea{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;box-sizing:border-box}
+textarea{min-height:120px}
+.toggle{display:flex;align-items:center;gap:8px;margin:16px 0}
+button{background:#0a70c0;color:white;border:none;padding:14px;width:100%;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer}
+#imageInput{display:none;margin-top:10px}
 </style>
 </head>
 <body>
-<div class="header">BDS.Philadelphia</div>
-<div class="sub">CLIENT MESSAGE DASHBOARD</div>
-
-<div class="tabs">
-<div class="tab active" id="tab-direct" onclick="switchTab('direct')">DIRECT MESSAGE</div>
-<div class="tab" id="tab-payment" onclick="switchTab('payment')">PAYMENT MESSAGE</div>
-<div class="tab" id="tab-withdraw" onclick="switchTab('withdraw')">WITHDRAW REQUESTS</div>
-</div>
-
-<!-- DIRECT MESSAGE -->
-<div id="direct-panel">
 <div class="card">
-<label>NAME</label><input id="d-name" value="Jennifer">
-<label>EMAIL</label><input id="d-email" value="client@email.com">
-<label>MESSAGE</label><textarea id="d-msg" rows="4" placeholder="Type your message here..."></textarea>
-<label>ATTACH IMAGE (Optional)</label><input type="file" id="d-file">
-<button class="main" onclick="sendDirect()">Send Message</button>
+<div class="header"><img src="logo.png"><h1>BDS</h1></div>
+<label>From Domain</label><input id="fromDomain" value="BDS <notify@bdsphilladelphia.online>">
+<label>Name</label><input id="name" placeholder="Client name">
+<label>Email</label><input id="email" type="email" placeholder="client@email.com">
+<label>Message Inbox</label><textarea id="message" placeholder="Write your direct message here..."></textarea>
+<div class="toggle"><input type="checkbox" id="enableImage" onchange="document.getElementById('imageInput').style.display=this.checked?'block':'none'"><label style="margin:0">Enable Image</label></div>
+<input type="file" id="imageInput" accept="image/*">
+<button onclick="sendMessage()">Send Direct Message</button>
+<p id="status"></p>
 </div>
-<div id="direct-list"></div>
-</div>
-
-<!-- PAYMENT MESSAGE -->
-<div id="payment-panel" style="display:none">
-<div class="card">
-<label>CLIENT NAME</label><input id="p-name" placeholder="Jennifer">
-<label>PAYMENT NOTE</label><textarea id="p-msg" rows="3" placeholder="Payment confirmed..."></textarea>
-<button class="main" onclick="sendPayment()">Send Payment Message</button>
-</div>
-<div id="payment-list"></div>
-</div>
-
-<!-- WITHDRAW REQUESTS -->
-<div id="withdraw-panel" style="display:none">
-<div class="card">
-<h3 style="margin-top:0">Request Withdrawal</h3>
-<label>AMOUNT (USDT)</label><input id="w-amount" type="number" placeholder="100">
-<label>WALLET ADDRESS</label><input id="w-wallet" placeholder="0x... or TRC20 address">
-<button class="main" onclick="requestWithdraw()">Submit Withdraw Request</button>
-<p style="font-size:12px;color:#8a92a6;margin-top:10px">Status will show as <span style="color:#ff9800">Under Review</span> until admin approves.</p>
-</div>
-<h3>All Withdraw Requests</h3>
-<div id="withdraw-list"></div>
-</div>
-
 <script>
-let directMsgs=JSON.parse(localStorage.getItem('directMsgs')||'[]');
-let paymentMsgs=JSON.parse(localStorage.getItem('paymentMsgs')||'[]');
-let withdraws=JSON.parse(localStorage.getItem('withdraws')||'[]');
-
-function switchTab(t){
-document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-document.getElementById('direct-panel').style.display='none';
-document.getElementById('payment-panel').style.display='none';
-document.getElementById('withdraw-panel').style.display='none';
-document.getElementById('tab-'+t).classList.add('active');
-document.getElementById(t+'-panel').style.display='block';
-if(t==='withdraw') renderWithdraws();
+async function sendMessage(){
+const s=document.getElementById('status');s.textContent="Sending...";
+const file=document.getElementById('imageInput').files[0];let img=null;
+if(file&&document.getElementById('enableImage').checked){img=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(file);});}
+const res=await fetch('/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({from:document.getElementById('fromDomain').value,name:document.getElementById('name').value,email:document.getElementById('email').value,message:document.getElementById('message').value,image:img})});
+const d=await res.json();s.textContent=d.success?"Sent! BDS will show in mailbox.":"Error: "+d.error;
 }
-function sendDirect(){
-let o={name:document.getElementById('d-name').value,email:document.getElementById('d-email').value,msg:document.getElementById('d-msg').value,time:new Date().toLocaleString()};
-directMsgs.unshift(o);localStorage.setItem('directMsgs',JSON.stringify(directMsgs));alert('Direct message sent');document.getElementById('d-msg').value='';renderDirect();
-}
-function sendPayment(){
-let o={name:document.getElementById('p-name').value,msg:document.getElementById('p-msg').value,time:new Date().toLocaleString()};
-paymentMsgs.unshift(o);localStorage.setItem('paymentMsgs',JSON.stringify(paymentMsgs));alert('Payment message sent');renderPayments();
-}
-function renderDirect(){document.getElementById('direct-list').innerHTML=directMsgs.map(m=>`<div class=withdraw-item><b>${m.name}</b> - ${m.email}<br>${m.msg}<br><small>${m.time}</small></div>`).join('')}
-function renderPayments(){document.getElementById('payment-list').innerHTML=paymentMsgs.map(m=>`<div class=withdraw-item><b>${m.name}</b><br>${m.msg}<br><small>${m.time}</small></div>`).join('')}
-
-function requestWithdraw(){
-let amount=document.getElementById('w-amount').value;
-let wallet=document.getElementById('w-wallet').value;
-if(!amount||!wallet){alert('Enter amount and wallet');return;}
-let o={id:Date.now(),amount,wallet,status:'Under Review',time:new Date().toLocaleString()};
-withdraws.unshift(o);localStorage.setItem('withdraws',JSON.stringify(withdraws));
-document.getElementById('w-amount').value='';document.getElementById('w-wallet').value='';
-renderWithdraws();alert('Withdraw request submitted - Under Review');
-}
-function renderWithdraws(){
-if(withdraws.length===0){document.getElementById('withdraw-list').innerHTML='<p style=color:#8a92a6>No withdraw requests yet</p>';return;}
-document.getElementById('withdraw-list').innerHTML=withdraws.map(w=>`
-<div class=withdraw-item>
-<div><b>$${w.amount}</b> <span class="badge ${w.status==='Sent'?'done':''}">${w.status}</span> <small style="float:right">${w.time}</small></div>
-<div style="margin:8px 0;word-break:break-all;background:#0f141f;padding:8px;border-radius:6px">${w.wallet}</div>
-<button class=small-btn onclick="copyWallet('${w.wallet}')">Copy Wallet</button>
-<button class="small-btn green" onclick="approveWithdraw(${w.id})">${w.status==='Sent'?'Approved':'Approve Sent'}</button>
-</div>`).join('');
-}
-function copyWallet(w){navigator.clipboard.writeText(w);alert('Wallet copied: '+w)}
-function approveWithdraw(id){
-let i=withdraws.findIndex(x=>x.id===id);
-if(i>=0){withdraws[i].status='Sent';localStorage.setItem('withdraws',JSON.stringify(withdraws));renderWithdraws();}
-}
-renderDirect();renderPayments();renderWithdraws();
 </script>
 </body>
 </html>
