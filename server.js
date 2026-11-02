@@ -2,138 +2,152 @@ const express = require('express');
 const cors = require('cors');
 const { Resend } = require('resend');
 const app = express();
-app.use(cors({origin:'*'}));
-app.use(express.json({limit:'30mb'}));
+app.use(cors());
+app.use(express.json({ limit: '20mb' }));
 const resend = new Resend(process.env.RESEND_API_KEY);
 let emailHistory = [];
-let withdrawHistory = [];
 
-app.get('/', (req,res)=>{
-res.setHeader('Content-Type','text/html');
-res.end(`
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>BDS Dashboard</title>
+app.get('/', (req, res) => {
+  const page = `
+<html><head><title>BDS Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
-*{box-sizing:border-box}body{margin:0;font-family:Arial;background:#0f141f;color:#fff}
-.container{max-width:1100px;margin:0 auto;padding:24px;display:flex;gap:20px}
-.left{flex:2}.right{flex:1}
-h1{margin:0;font-size:26px}.sub{color:#8b9bb4;font-size:11px;margin:6px 0 18px;font-weight:700}
-.tabs{display:flex;gap:12px;margin-bottom:20px}
-.tab{flex:1;padding:14px;text-align:center;border-radius:10px;cursor:pointer;font-weight:800;font-size:12px;background:#1e293b;color:#8b9bb4;border:1px solid #263244}
-.tab.active{background:#2563eb;color:#fff}
-.card{background:#131b29;border:1px solid #1e2d45;border-radius:16px;padding:22px}
-.row{display:flex;gap:14px}.row>div{flex:1}
-label{font-size:11px;color:#8b9bb4;font-weight:700;display:block;margin:14px 0 6px}
-input,textarea,select{width:100%;padding:12px;background:#0f172a;border:1px solid #1e2d45;border-radius:10px;color:#fff}
-textarea{min-height:110px}
-.attach{margin-top:14px;border:1px dashed #1e2d45;border-radius:10px;padding:12px;background:#0f172a}
-button.send{width:100%;padding:14px;background:#2563eb;color:#fff;border:none;border-radius:12px;font-weight:800;cursor:pointer;margin-top:18px}
-.item{background:#0f172a;padding:10px;border-radius:10px;margin-bottom:8px;border:1px solid #1e2d45;word-break:break-all;font-size:13px}
+body{font-family:Arial,sans-serif;background:#0f0f0f;color:white;margin:0;padding:0}
+.container{display:flex;min-height:100vh}
+.main{flex:2;padding:30px}.sidebar{flex:1;background:#151515;border-left:1px solid #2a2a2a;padding:20px;max-width:380px;overflow-y:auto}
+.card{background:#1a1a1a;padding:25px;border-radius:12px;border:1px solid #2a2a2a}
+.tabs{display:flex;gap:10px;margin-bottom:20px}
+.tab{flex:1;padding:12px;text-align:center;border-radius:8px;cursor:pointer;font-size:13px;font-weight:bold;border:1px solid #333}
+.tab.active{background:#3b82f6;color:white;border-color:#3b82f6}
+.tab.inactive{background:#262626;color:#888}
+.row{display:flex;gap:15px}.row div{flex:1}
+label{font-size:11px;color:#888;letter-spacing:1.5px}
+input,textarea,select{width:100%;padding:14px;margin:8px 0 18px 0;background:#262626;border:1px solid #333;border-radius:8px;color:white;box-sizing:border-box}
+button.main{width:100%;padding:16px;background:#3b82f6;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer;font-size:15px}
+.upload{border:1px dashed #444;padding:12px;border-radius:8px;text-align:center;margin-bottom:18px;background:#262626}
+#preview{max-width:100%;margin-top:10px;border-radius:8px;display:none}
+.history-item{background:#262626;padding:14px;border-radius:8px;margin-bottom:12px;border:1px solid #333}
+.btn-small{padding:6px 12px;font-size:11px;border-radius:6px;border:none;cursor:pointer;margin-right:5px}
+.btn-resend{background:#3b82f6;color:white}.btn-use{background:#333;color:white}
+.hidden{display:none}
 </style>
 </head><body>
 <div class="container">
-<div class="left">
-<h1>BDS.Philadelphia</h1><div class="sub">MESSAGE DASHBOARD</div>
-<div class="tabs">
-<div id="tD" class="tab active">DIRECT MESSAGE</div>
-<div id="tP" class="tab">PAYMENT MESSAGE</div>
-<div id="tW" class="tab">WITHDRAW (<span id="wCount">0</span>)</div>
+  <div class="main">
+    <div class="card">
+      <h2 style="margin:0">BDS.Philadelphia</h2><p style="color:#666;font-size:12px">CLIENT MESSAGE DASHBOARD</p>
+      <div class="tabs">
+        <div id="tabDirect" class="tab active" onclick="switchMode('direct')">DIRECT MESSAGE</div>
+        <div id="tabPayment" class="tab inactive" onclick="switchMode('payment')">PAYMENT MESSAGE</div>
+      </div>
+      <div class="row">
+        <div><label>NAME</label><input id="name" placeholder="Jennifer" /></div>
+        <div><label>EMAIL</label><input id="email" placeholder="client@email.com" /></div>
+      </div>
+      <div id="paymentFields" class="hidden">
+        <div class="row">
+          <div><label>AMOUNT</label><input id="amount" placeholder="e.g. 2500" /></div>
+          <div><label>ASSET TYPE</label>
+            <select id="asset">
+              <option value="">Select Asset</option>
+              <option value="BTC">BTC</option>
+              <option value="ETH">ETH</option>
+              <option value="USDT">USDT</option>
+              <option value="USD">USD</option>
+              <option value="SOL">SOL</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <label>MESSAGE</label>
+      <textarea id="message" rows="6" placeholder="Type your message here..."></textarea>
+      <label>ATTACH IMAGE (Optional)</label>
+      <div class="upload"><input type="file" id="image" accept="image/*" onchange="previewImage(this)" /><img id="preview" /><p id="fileName" style="color:#888;font-size:12px"></p></div>
+      <button class="main" onclick="send()">Send Message</button>
+      <p id="status" style="text-align:center;margin-top:15px;color:#3b82f6"></p>
+    </div>
+  </div>
+  <div class="sidebar"><h3 style="font-size:14px">HISTORY</h3><div id="historyList"><p style="color:#555;font-size:12px">No emails yet</p></div></div>
 </div>
-
-<div class="card" id="boxD">
-<div class="row"><div><label>NAME</label><input id="dName"></div><div><label>EMAIL</label><input id="dEmail" placeholder="client@email.com"></div></div>
-<label>MESSAGE</label><textarea id="dMsg"></textarea>
-<div class="attach"><label>ATTACH IMAGE (Optional)</label><input type="file" id="dImg" accept="image/*"></div>
-<button class="send" id="btnD">Send Message</button><div id="sD"></div>
-</div>
-
-<div class="card" id="boxP" style="display:none">
-<div class="row"><div><label>NAME</label><input id="pName"></div><div><label>EMAIL</label><input id="pEmail"></div></div>
-<div class="row"><div><label>AMOUNT</label><input id="pAmount"></div><div><label>ASSET</label><select id="pAsset"><option>USDT</option><option>BTC</option><option>ETH</option><option>BANK</option></select></div></div>
-<label>MESSAGE</label><textarea id="pMsg"></textarea>
-<div class="attach"><label>ATTACH IMAGE (Optional)</label><input type="file" id="pImg" accept="image/*"></div>
-<button class="send" id="btnP">Send Payment Message</button><div id="sP"></div>
-</div>
-
-<div class="card" id="boxW" style="display:none">
-<h3>Withdraw Requests</h3><div id="wList">No requests yet</div>
-</div>
-</div>
-
-<div class="right"><div class="card"><h3 style="font-size:14px">HISTORY</h3><div id="hList"></div></div></div>
-</div>
-
 <script>
-var wdCache=[];
-function showTab(m){
-document.getElementById('tD').className=m=='direct'?'tab active':'tab';
-document.getElementById('tP').className=m=='payment'?'tab active':'tab';
-document.getElementById('tW').className=m=='withdraw'?'tab active':'tab';
-document.getElementById('boxD').style.display=m=='direct'?'block':'none';
-document.getElementById('boxP').style.display=m=='payment'?'block':'none';
-document.getElementById('boxW').style.display=m=='withdraw'?'block':'none';
-if(m=='withdraw') loadW();
+let base64Image=null,imageName=null,historyData=[],currentMode='direct';
+function switchMode(mode){
+  currentMode=mode;
+  document.getElementById('tabDirect').className=mode==='direct'?'tab active':'tab inactive';
+  document.getElementById('tabPayment').className=mode==='payment'?'tab active':'tab inactive';
+  document.getElementById('paymentFields').className=mode==='payment'?'':'hidden';
 }
-document.getElementById('tD').addEventListener('click',function(){showTab('direct')});
-document.getElementById('tP').addEventListener('click',function(){showTab('payment')});
-document.getElementById('tW').addEventListener('click',function(){showTab('withdraw')});
-
-async function loadH(){try{var r=await fetch('/history');var h=await r.json();var html='';for(var i=0;i<h.length;i++){html+='<div class=item><b>'+h[i].name+'</b><br>'+h[i].to+'</div>'}document.getElementById('hList').innerHTML=html||'No history'}catch(e){}}
-async function loadW(){
-try{
-var r=await fetch('/withdraw-history');var list=await r.json();wdCache=list;
-document.getElementById('wCount').innerText=list.length;
-var html='';if(list.length==0)html='No requests yet';
-for(var i=0;i<list.length;i++){var w=list[i];html+='<div class=item><b>'+w.clientName+'</b> - '+w.status+'<br><small>'+w.clientEmail+' | $'+w.amount+'</small><div style=background:#020617;padding:6px;margin:6px 0;border-radius:6px>'+w.wallet+'</div><button onclick="copyW('+i+')">Copy</button> ';if(w.status=='Under Review'){html+='<button onclick="approveW('+w.id+')">Approve</button><button onclick="declineW('+w.id+')">Decline</button>'}html+='<br><input type=file accept=image/* onchange="uploadProof('+w.id+',this)">'+(w.proof?'<br><img src='+w.proof+' style=max-width:100%>':'')+'</div>'}
-document.getElementById('wList').innerHTML=html;
-}catch(e){}
-}
-window.copyW=function(i){navigator.clipboard.writeText(wdCache[i].wallet);alert('Copied')};
-window.approveW=async function(id){if(!confirm('Approve?'))return;await fetch('/withdraw-approve/'+id,{method:'POST'});loadW()};
-window.declineW=async function(id){var rs=prompt('Reason?');await fetch('/withdraw-decline/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:rs})});loadW()};
-window.uploadProof=async function(id,el){var f=el.files[0];var r=new FileReader();r.onload=async function(e){await fetch('/withdraw-proof/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proof:e.target.result})});loadW()};r.readAsDataURL(f)};
-async function getImg(id){var el=document.getElementById(id);if(!el.files[0])return null;return await new Promise(function(res){var rd=new FileReader();rd.onload=function(){res(rd.result)};rd.readAsDataURL(el.files[0])})}
-document.getElementById('btnD').addEventListener('click',async function(){var n=document.getElementById('dName').value;var to=document.getElementById('dEmail').value;var m=document.getElementById('dMsg').value;if(!n||!to||!m){alert('Fill all');return}document.getElementById('sD').innerText='Sending...';var img=await getImg('dImg');var r=await fetch('/send-message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:to,name:n,message:m,image:img})});var d=await r.json();document.getElementById('sD').innerText=d.success?'Sent!':'Error';if(d.success)loadH()});
-document.getElementById('btnP').addEventListener('click',async function(){var n=document.getElementById('pName').value;var to=document.getElementById('pEmail').value;var m=document.getElementById('pMsg').value;var amt=document.getElementById('pAmount').value;var asset=document.getElementById('pAsset').value;if(!n||!to){alert('Fill name email');return}document.getElementById('sP').innerText='Sending...';var img=await getImg('pImg');var r=await fetch('/send-message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:to,name:n,message:m,amount:amt,asset:asset,image:img})});var d=await r.json();document.getElementById('sP').innerText=d.success?'Sent!':'Error';if(d.success)loadH()});
-loadH();loadW();
+function previewImage(input){const file=input.files[0];if(!file)return;imageName=file.name;document.getElementById('fileName').innerText=file.name;const reader=new FileReader();reader.onload=function(e){base64Image=e.target.result;const img=document.getElementById('preview');img.src=base64Image;img.style.display='block';};reader.readAsDataURL(file);}
+async function loadHistory(){const res=await fetch('/history');historyData=await res.json();const list=document.getElementById('historyList');if(historyData.length===0){list.innerHTML='<p style="color:#555;font-size:12px">No emails yet</p>';return}let html='';for(let i=0;i<historyData.length;i++){const h=historyData[i];let extra=h.amount?'<span style="color:#3b82f6;font-size:11px">'+h.amount+' '+h.asset+'</span> ':'';html+='<div class="history-item"><b>'+h.name+'</b> '+extra+'<span style="color:#666;font-size:11px">'+new Date(h.date).toLocaleString()+'</span><p>'+h.to+'</p><p style="color:#aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+h.message.substring(0,60)+'...</p><button class="btn-small btn-resend" onclick="resendEmail('+i+')">Resend</button><button class="btn-small btn-use" onclick="useEmail('+i+')">Use Again</button></div>';}list.innerHTML=html;}
+function useEmail(i){const h=historyData[i];document.getElementById('name').value=h.name;document.getElementById('email').value=h.to;document.getElementById('message').value=h.message;if(h.amount){switchMode('payment');document.getElementById('amount').value=h.amount;document.getElementById('asset').value=h.asset;}else{switchMode('direct');}window.scrollTo(0,0);}
+async function resendEmail(i){const h=historyData[i];if(!confirm('Resend to '+h.to+'?'))return;document.getElementById('status').innerText='Resending...';const res=await fetch('/resend/'+i,{method:'POST'});const data=await res.json();document.getElementById('status').innerText=data.success?'Resent':'Error: '+data.error;loadHistory();}
+async function send(){const name=document.getElementById('name').value;const email=document.getElementById('email').value;const message=document.getElementById('message').value;const amount=document.getElementById('amount').value;const asset=document.getElementById('asset').value;if(!name||!email||!message){alert('Fill name, email, message');return}document.getElementById('status').innerText='Sending...';const res=await fetch('/send-message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:email,name:name,message:message,amount:amount,asset:asset,image:base64Image,imageName:imageName})});const data=await res.json();document.getElementById('status').innerText=data.success?'Sent to '+email:'Error: '+data.error;if(data.success){document.getElementById('message').value='';loadHistory();}}
+loadHistory();
 </script>
 </body></html>
-`);
+`;
+  res.send(page);
 });
 
-app.get('/history',(req,res)=>res.json(emailHistory));
-app.get('/withdraw-history',(req,res)=>res.json(withdrawHistory));
-app.post('/api/client-withdraw',(req,res)=>{
-let b=req.body; if(!b.amount||!b.wallet||!b.clientEmail) return res.status(400).json({error:'missing'});
-withdrawHistory.unshift({id:Date.now(),clientName:b.clientName||'Client',clientEmail:b.clientEmail,amount:b.amount,wallet:b.wallet,status:'Under Review',date:new Date(),proof:null});
-res.json({success:true});
+app.get('/history', (req, res) => { res.json(emailHistory); });
+
+app.post('/send-message', async (req, res) => {
+  const { to, name, message, amount, asset, image, imageName } = req.body;
+  const hasPayment = amount && amount.toString().trim() !== '';
+  
+  let amountBlock = '';
+  if (hasPayment) {
+    amountBlock = '<div style="margin-top:20px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:16px;display:flex;gap:20px">'
+      + '<div><div style="font-size:11px;color:#64748b;letter-spacing:1px">AMOUNT</div><div style="font-size:16px;color:#0b1e3a;font-weight:bold;margin-top:4px">' + amount + '</div></div>'
+      + '<div style="border-left:1px solid #e2e8f0;padding-left:20px"><div style="font-size:11px;color:#64748b;letter-spacing:1px">ASSET</div><div style="font-size:16px;color:#0b1e3a;font-weight:bold;margin-top:4px">' + (asset || 'USD') + '</div></div>'
+      + '</div>';
+  }
+
+  const htmlContent = '<div style="margin:0;padding:20px;background:#f4f6f9;font-family:Arial,sans-serif">'
+    + '<div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08)">'
+    + '<div style="background:#0b1e3a;padding:28px 32px;display:flex;align-items:center">'
+    + '<div style="width:44px;height:44px;background:#3b82f6;border-radius:50%;text-align:center;line-height:44px;color:white;font-weight:bold;font-size:13px;letter-spacing:0.5px">BDS</div>'
+    + '<div style="margin-left:14px"><div style="color:white;font-size:16px;font-weight:bold">BDS.Philadelphia</div><div style="color:#7da0d6;font-size:11px;letter-spacing:1px;margin-top:2px">TRADING PLATFORM</div></div></div>'
+    + '<div style="padding:32px">'
+    + '<div style="font-size:16px;color:#0b1e3a;font-weight:bold">Hello ' + name + ',</div>'
+    + amountBlock
+    + '<div style="font-size:14px;color:#334155;line-height:1.7;white-space:pre-wrap;margin-top:20px">' + message + '</div>'
+    + '<div style="margin-top:32px"><div style="font-size:13px;color:#334155">Best regards,</div><div style="font-size:13px;color:#0b1e3a;font-weight:bold;margin-top:2px">BDS.Philadelphia Team</div></div>'
+    + '</div>'
+    + '<div style="background:#f8fafc;padding:18px 32px;border-top:1px solid #eef2f7"><p style="font-size:11px;color:#94a3b8;line-height:1.5;margin:0">Automated notification from BDS.Philadelphia Trading Platform. Please do not reply directly.<br/>© 2026 BDS.Philadelphia. All rights reserved.</p></div>'
+    + '</div></div>';
+
+  try {
+    const payload = {
+      from: 'BDS.Philadelphia <noreply@bdsphilladelphia.online>',
+      to: to,
+      subject: 'BDS TRADING PLATFORM NOTIFY',
+      html: htmlContent,
+    };
+    if (image) {
+      const base64Data = image.split(',')[1];
+      payload.attachments = [{ filename: imageName || 'image.jpg', content: base64Data }];
+    }
+    const data = await resend.emails.send(payload);
+    emailHistory.unshift({ to: to, name: name, message: message, amount: amount, asset: asset, date: new Date(), id: Date.now() });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.get('/api/withdraw-status',(req,res)=>{
-let email=req.query.email; if(!email) return res.json([]);
-let filtered=withdrawHistory.filter(x=>x.clientEmail.toLowerCase()==email.toLowerCase());
-res.json(filtered);
+
+app.post('/resend/:index', async (req, res) => {
+  const idx = parseInt(req.params.index);
+  const h = emailHistory[idx];
+  if (!h) return res.status(404).json({ error: 'Not found' });
+  try {
+    let amountBlock = '';
+    if (h.amount) {
+      amountBlock = '<div style="margin-top:20px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:10px;padding:16px;display:flex;gap:20px"><div><div style="font-size:11px;color:#64748b">AMOUNT</div><div style="font-size:16px;color:#0b1e3a;font-weight:bold">' + h.amount + '</div></div><div style="border-left:1px solid #e2e8f0;padding-left:20px"><div style="font-size:11px;color:#64748b">ASSET</div><div style="font-size:16px;color:#0b1e3a;font-weight:bold">' + (h.asset || 'USD') + '</div></div></div>';
+    }
+    const htmlContent = '<div style="margin:0;padding:20px;background:#f4f6f9;font-family:Arial,sans-serif"><div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden"><div style="background:#0b1e3a;padding:28px 32px;display:flex;align-items:center"><div style="width:44px;height:44px;background:#3b82f6;border-radius:50%;text-align:center;line-height:44px;color:white;font-weight:bold;font-size:13px">BDS</div><div style="margin-left:14px"><div style="color:white;font-size:16px;font-weight:bold">BDS.Philadelphia</div><div style="color:#7da0d6;font-size:11px">TRADING PLATFORM</div></div></div><div style="padding:32px"><div style="font-size:16px;color:#0b1e3a;font-weight:bold">Hello ' + h.name + ',</div>' + amountBlock + '<div style="font-size:14px;color:#334155;line-height:1.7;white-space:pre-wrap;margin-top:20px">' + h.message + '</div><div style="margin-top:32px"><div style="font-size:13px;color:#334155">Best regards,</div><div style="font-size:13px;color:#0b1e3a;font-weight:bold">BDS.Philadelphia Team</div></div></div></div></div>';
+    const data = await resend.emails.send({ from: 'BDS.Philadelphia <noreply@bdsphilladelphia.online>', to: h.to, subject: 'BDS TRADING PLATFORM NOTIFY', html: htmlContent });
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
-app.post('/withdraw-proof/:id',(req,res)=>{let id=parseInt(req.params.id);let i=withdrawHistory.findIndex(x=>x.id==id);if(i>=0)withdrawHistory[i].proof=req.body.proof;res.json({success:true})});
-app.post('/withdraw-approve/:id',async(req,res)=>{
-let i=withdrawHistory.findIndex(x=>x.id==parseInt(req.params.id)); if(i<0) return res.json({error:'not found'});
-withdrawHistory[i].status='Sent';
-try{let att=withdrawHistory[i].proof?[{filename:'proof.jpg',content:withdrawHistory[i].proof.split(',')[1],encoding:'base64'}]:undefined; await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>',to:withdrawHistory[i].clientEmail,subject:'Withdrawal Approved $'+withdrawHistory[i].amount,html:'Your $'+withdrawHistory[i].amount+' approved',attachments:att})}catch(e){}
-res.json({success:true});
-});
-app.post('/withdraw-decline/:id',async(req,res)=>{
-let i=withdrawHistory.findIndex(x=>x.id==parseInt(req.params.id)); if(i<0) return res.json({error:'not found'});
-withdrawHistory[i].status='Declined';
-try{await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>',to:withdrawHistory[i].clientEmail,subject:'Withdrawal Declined',html:'Declined: '+(req.body.reason||'')})}catch(e){}
-res.json({success:true});
-});
-app.post('/send-message',async(req,res)=>{
-let {to,name,message,amount,asset,image}=req.body;
-try{
-let attachments; if(image){attachments=[{filename:'image.jpg',content:image.split(',')[1],encoding:'base64'}]}
-let html='Hello '+name+'<br><br>'+message+(amount?'<br><br>Amount: '+amount+' '+asset:'');
-let result=await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>',to:to,subject: amount? 'Payment $'+amount : 'Direct Message',html:html,attachments:attachments});
-emailHistory.unshift({to:to,name:name,message:message,amount:amount,asset:asset,date:new Date()});
-res.json({success:true,data:result});
-}catch(e){res.status(500).json({success:false,error:e.message})}
-});
-app.listen(process.env.PORT||10000,()=>console.log('ok'));
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log('Running on ' + PORT));
