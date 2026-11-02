@@ -7,158 +7,95 @@ app.use(express.json({ limit: '20mb' }));
 const resend = new Resend(process.env.RESEND_API_KEY);
 let emailHistory = [];
 let withdrawHistory = [];
+let wdCache = [];
 
 app.get('/', (req, res) => {
-  const page = `
-<html><head><title>BDS Dashboard</title>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
+res.send(`
+<html><head><title>BDS</title><meta name="viewport" content="width=device-width, initial-scale=1"/>
 <style>
-body{font-family:Arial,sans-serif;background:#0f0f0f;color:white;margin:0;padding:0}
+body{font-family:Arial;background:#0f0f0f;color:white;margin:0}
 .container{display:flex;min-height:100vh}
-.main{flex:2;padding:30px}.sidebar{flex:1;background:#151515;border-left:1px solid #2a2a2a;padding:20px;max-width:380px;overflow-y:auto}
+.main{flex:2;padding:30px}.sidebar{flex:1;background:#151515;border-left:1px solid #2a2a2a;padding:20px;max-width:380px}
 .card{background:#1a1a1a;padding:25px;border-radius:12px;border:1px solid #2a2a2a}
 .tabs{display:flex;gap:10px;margin-bottom:20px}
-.tab{flex:1;padding:12px;text-align:center;border-radius:8px;cursor:pointer;font-size:11px;font-weight:bold;border:1px solid #333;user-select:none}
-.tab.active{background:#3b82f6;color:white;border-color:#3b82f6}.tab.inactive{background:#262626;color:#888}
-input,textarea,select{width:100%;padding:14px;margin:8px 0 18px 0;background:#262626;border:1px solid #333;border-radius:8px;color:white;box-sizing:border-box}
-button.main{width:100%;padding:16px;background:#3b82f6;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer}
-.history-item{background:#262626;padding:14px;border-radius:8px;margin-bottom:12px;border:1px solid #333}
-.btn-small{padding:6px 12px;font-size:11px;border-radius:6px;border:none;cursor:pointer;margin-right:5px}
-.hidden{display:none !important}.badge{padding:3px 8px;border-radius:10px;font-size:10px;margin-left:8px}
-.badge-review{background:#ff9800;color:white}.badge-sent{background:#00c853;color:white}.badge-decline{background:#ff3b3b;color:white}
-.upload{border:1px dashed #444;padding:8px;border-radius:8px;text-align:center;margin-top:10px;background:#1a1a1a}
-</style>
-</head><body>
-<div class="container">
-<div class="main">
-<div class="card">
-<h2 style="margin:0">BDS.Philadelphia</h2><p style="color:#666;font-size:12px">CLIENT MESSAGE DASHBOARD</p>
+.tab{flex:1;padding:12px;text-align:center;border-radius:8px;cursor:pointer;font-weight:bold;border:1px solid #333}
+.tab.active{background:#3b82f6;color:white}.tab.inactive{background:#262626;color:#888}
+input,textarea,select{width:100%;padding:12px;margin:8px 0 12px;background:#262626;border:1px solid #333;border-radius:8px;color:white}
+button.main{width:100%;padding:14px;background:#3b82f6;color:white;border:none;border-radius:8px;font-weight:bold;cursor:pointer}
+.history-item{background:#262626;padding:12px;border-radius:8px;margin-bottom:12px;border:1px solid #333;word-break:break-all}
+.btn{padding:6px 10px;font-size:11px;border-radius:6px;border:none;cursor:pointer;margin-right:5px}
+</style></head><body>
+<div class="container"><div class="main"><div class="card">
+<h2>BDS.Philadelphia</h2>
 <div class="tabs">
-<div id="tabDirect" class="tab active" onclick="switchMode('direct')">DIRECT MESSAGE</div>
-<div id="tabPayment" class="tab inactive" onclick="switchMode('payment')">PAYMENT MESSAGE</div>
-<div id="tabWithdraw" class="tab inactive" onclick="switchMode('withdraw')">WITHDRAW REQUESTS (<span id="wCount">0</span>)</div>
+<div id="tDirect" class="tab active" onclick="showTab('direct')">DIRECT</div>
+<div id="tPayment" class="tab inactive" onclick="showTab('payment')">PAYMENT</div>
+<div id="tWithdraw" class="tab inactive" onclick="showTab('withdraw')">WITHDRAW (<span id="wCount">0</span>)</div>
 </div>
 
-<div id="directPaymentSection">
-<div style="display:flex;gap:15px"><div style="flex:1"><label>NAME</label><input id="name"/></div><div style="flex:1"><label>EMAIL</label><input id="email"/></div></div>
-<div id="paymentFields" class="hidden"><div style="display:flex;gap:15px"><div style="flex:1"><label>AMOUNT</label><input id="amount"/></div><div style="flex:1"><label>ASSET</label><select id="asset"><option>USDT</option><option>BTC</option><option>ETH</option><option>USD</option></select></div></div></div>
-<label>MESSAGE</label><textarea id="message" rows="5"></textarea>
-<label>ATTACH IMAGE (Optional)</label><div class="upload"><input type="file" id="image" accept="image/*" onchange="previewImage(this)" /><img id="preview" style="max-width:100%;display:none;margin-top:10px"/><p id="fileName" style="color:#888;font-size:12px"></p></div>
-<button class="main" onclick="send()" style="margin-top:15px">Send Message</button><p id="status" style="text-align:center;color:#3b82f6"></p>
-</div>
-
-<div id="withdrawSection" class="hidden">
-<h3 style="margin:0">Incoming Withdraw Requests</h3><p style="color:#888;font-size:12px">Client requests show here. Upload proof screenshot, then Approve. Email auto-sends to client.</p>
-<div id="withdrawList" style="margin-top:20px"></div>
-</div>
-
-</div></div>
-<div class="sidebar"><h3>HISTORY</h3><div id="historyList"></div></div>
-</div>
+<div id="boxDirect"><label>NAME</label><input id="name"><label>EMAIL</label><input id="email"><label>MESSAGE</label><textarea id="message" rows="3"></textarea><button class="main" onclick="sendMsg()">Send Direct</button><p id="status"></p></div>
+<div id="boxPayment" style="display:none"><label>NAME</label><input id="pname"><label>EMAIL</label><input id="pemail"><label>AMOUNT</label><input id="amount"><label>ASSET</label><select id="asset"><option>USDT</option><option>BTC</option><option>ETH</option></select><label>MESSAGE</label><textarea id="pmessage" rows="3"></textarea><button class="main" onclick="sendPay()">Send Payment</button><p id="pstatus"></p></div>
+<div id="boxWithdraw" style="display:none"><h3>Withdraw Requests</h3><div id="withdrawList">Loading...</div></div>
+</div></div><div class="sidebar"><h3>HISTORY</h3><div id="historyList"></div></div></div>
 <script>
-let base64Image=null,imageName=null;
-function switchMode(m){
-  const directTab=document.getElementById('tabDirect');
-  const payTab=document.getElementById('tabPayment');
-  const withTab=document.getElementById('tabWithdraw');
-  const directSec=document.getElementById('directPaymentSection');
-  const withSec=document.getElementById('withdrawSection');
-  const payFields=document.getElementById('paymentFields');
-  
-  directTab.className = m==='direct' ? 'tab active' : 'tab inactive';
-  payTab.className = m==='payment' ? 'tab active' : 'tab inactive';
-  withTab.className = m==='withdraw' ? 'tab active' : 'tab inactive';
-  
-  if(m==='withdraw'){
-    directSec.classList.add('hidden');
-    withSec.classList.remove('hidden');
-  } else {
-    directSec.classList.remove('hidden');
-    withSec.classList.add('hidden');
-    if(m==='payment') payFields.classList.remove('hidden');
-    else payFields.classList.add('hidden');
-  }
-  if(m==='withdraw') loadWithdraws();
+let currentTab='direct';
+function showTab(m){
+ currentTab=m;
+ document.getElementById('tDirect').className=m==='direct'?'tab active':'tab inactive';
+ document.getElementById('tPayment').className=m==='payment'?'tab active':'tab inactive';
+ document.getElementById('tWithdraw').className=m==='withdraw'?'tab active':'tab inactive';
+ document.getElementById('boxDirect').style.display=m==='direct'?'block':'none';
+ document.getElementById('boxPayment').style.display=m==='payment'?'block':'none';
+ document.getElementById('boxWithdraw').style.display=m==='withdraw'?'block':'none';
+ if(m==='withdraw') loadWithdraws();
 }
-function previewImage(input){const file=input.files[0];if(!file)return;imageName=file.name;document.getElementById('fileName').innerText=file.name;const reader=new FileReader();reader.onload=function(e){base64Image=e.target.result;document.getElementById('preview').src=base64Image;document.getElementById('preview').style.display='block';};reader.readAsDataURL(file);}
-async function loadHistory(){try{const res=await fetch('/history');const h=await res.json();let html='';for(let x of h){html+='<div class=history-item><b>'+x.name+'</b><p>'+x.to+'</p></div>';}document.getElementById('historyList').innerHTML=html||'<p style=color:#555>No emails yet</p>';}catch(e){}}
+async function loadHistory(){try{const r=await fetch('/history');const h=await r.json();let html='';for(let x of h){html+='<div class=history-item><b>'+x.name+'</b><br/>'+x.to+'</div>'}document.getElementById('historyList').innerHTML=html||'No history';}catch(e){}}
 async function loadWithdraws(){
  try{
-  const res=await fetch('/withdraw-history'); const list=await res.json();
+  const r=await fetch('/withdraw-history'); const list=await r.json(); wdCache=list;
   document.getElementById('wCount').innerText=list.length;
-  const div=document.getElementById('withdrawList');
-  if(list.length===0){div.innerHTML='<p style=color:#666>No withdraw requests yet - clients will appear here</p>';return}
-  let html=''; for(let w of list){
-   let badge=w.status==='Sent'?'<span class=badge badge-sent>Sent</span>':w.status==='Declined'?'<span class=badge badge-decline>Declined</span>':'<span class=badge badge-review>Under Review</span>';
-   html+='<div class=history-item><div><b>'+(w.clientName||'Client')+'</b> '+badge+' <span style=float:right;color:#666;font-size:11px>'+new Date(w.date).toLocaleString()+'</span></div>'+
-   '<p style=color:#888;font-size:12px;margin:5px 0'>'+w.clientEmail+' | <b style=color:white>$'+w.amount+' USDT</b></p>'+
-   '<div style=background:#0f0f0f;padding:8px;border-radius:6px;word-break:break-all;font-size:12px;margin:8px 0>'+w.wallet+'</div>'+
-   '<button class=btn-small style=background:#444;color:white onclick="copyW(\\''+w.wallet+'\\')">Copy Wallet</button>'+
-   (w.status==='Under Review'?'<button class=btn-small style=background:#00c853;color:white onclick="approveW('+w.id+')">Approve & Send Email</button><button class=btn-small style=background:#ff3b3b;color:white onclick="declineW('+w.id+')">Decline</button>':'<span style=color:#888;font-size:11px> Emailed</span>')+
-   '<div style=margin-top:10px><label style=font-size:10px>Upload proof screenshot BEFORE approve:</label><input type=file accept=image/* onchange="uploadProof('+w.id+',this)"/></div>'+
-   (w.proof?'<img src='+w.proof+' style=max-width:100%;margin-top:10px;border-radius:6px />':'')+'</div>';
+  let html=''; if(list.length===0) html='<p style=color:#666>No requests</p>';
+  for(let i=0;i<list.length;i++){let w=list[i];let badge=w.status==='Sent'?'Sent':w.status==='Declined'?'Declined':'Under Review';
+   html+='<div class=history-item><b>'+w.clientName+'</b> - '+badge+'<br/><small>'+w.clientEmail+' | $'+w.amount+'</small><div style=background:#0f0f0f;padding:8px;margin:8px 0;border-radius:6px>'+w.wallet+'</div><button class=btn style=background:#444;color:white onclick="copyIdx('+i+')">Copy Wallet</button>';
+   if(w.status==='Under Review'){html+='<button class=btn style=background:#00c853;color:white onclick="approveW('+w.id+')">Approve</button><button class=btn style=background:#ff3b3b;color:white onclick="declineW('+w.id+')">Decline</button>';}
+   html+='<div style=margin-top:8px'><input type=file accept=image/* onchange="uploadProof('+w.id+',this)"/></div>'+(w.proof?'<img src='+w.proof+' style=max-width:100%;margin-top:8px;border-radius:6px/>':'')+'</div>';
   }
-  div.innerHTML=html;
- }catch(e){}
+  document.getElementById('withdrawList').innerHTML=html;
+ }catch(e){document.getElementById('withdrawList').innerText='Error loading';}
 }
-function copyW(w){navigator.clipboard.writeText(w);alert('Copied: '+w)}
-async function approveW(id){if(!confirm('Approve? This will EMAIL client that money was sent'))return;await fetch('/withdraw-approve/'+id,{method:'POST'});loadWithdraws();}
-async function declineW(id){let reason=prompt('Reason?');await fetch('/withdraw-decline/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason})});loadWithdraws();}
-async function uploadProof(id,input){const file=input.files[0];const reader=new FileReader();reader.onload=async function(e){await fetch('/withdraw-proof/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proof:e.target.result})});loadWithdraws();};reader.readAsDataURL(file);}
-async function send(){const name=document.getElementById('name').value;const email=document.getElementById('email').value;const message=document.getElementById('message').value;const amount=document.getElementById('amount').value;const asset=document.getElementById('asset').value;if(!name||!email||!message){alert('Fill');return}document.getElementById('status').innerText='Sending...';const res=await fetch('/send-message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:email,name,message,amount,asset,image:base64Image,imageName:imageName})});const data=await res.json();document.getElementById('status').innerText=data.success?'Sent':'Error';if(data.success)loadHistory();}
-loadHistory(); loadWithdraws();
+function copyIdx(i){let w=wdCache[i].wallet; navigator.clipboard.writeText(w); alert('Copied: '+w);}
+async function approveW(id){if(!confirm('Approve and email client?'))return;await fetch('/withdraw-approve/'+id,{method:'POST'});loadWithdraws();}
+async function declineW(id){let rs=prompt('Reason?');await fetch('/withdraw-decline/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:rs})});loadWithdraws();}
+async function uploadProof(id,input){let f=input.files[0];let rd=new FileReader();rd.onload=async e=>{await fetch('/withdraw-proof/'+id,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({proof:e.target.result})});loadWithdraws();};rd.readAsDataURL(f);}
+async function sendMsg(){let name=document.getElementById('name').value;let to=document.getElementById('email').value;let message=document.getElementById('message').value;if(!name||!to)return alert('fill');document.getElementById('status').innerText='Sending...';let r=await fetch('/send-message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to,name,message})});let d=await r.json();document.getElementById('status').innerText=d.success?'Sent':'Error';if(d.success)loadHistory();}
+async function sendPay(){let name=document.getElementById('pname').value;let to=document.getElementById('pemail').value;let message=document.getElementById('pmessage').value;let amount=document.getElementById('amount').value;let asset=document.getElementById('asset').value;if(!name||!to)return alert('fill');document.getElementById('pstatus').innerText='Sending...';let r=await fetch('/send-message',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to,name,message,amount,asset})});let d=await r.json();document.getElementById('pstatus').innerText=d.success?'Sent':'Error';if(d.success)loadHistory();}
+loadHistory();loadWithdraws();
 </script></body></html>
-`;
-  res.send(page);
+`);
 });
-
-app.get('/history', (req,res)=>res.json(emailHistory));
-app.get('/withdraw-history', (req,res)=>res.json(withdrawHistory));
-app.post('/api/client-withdraw', (req,res)=>{
-  const { clientName, clientEmail, amount, wallet } = req.body;
-  if(!amount || !wallet || !clientEmail) return res.status(400).json({error:'missing'});
-  const obj = { id: Date.now(), clientName: clientName||'Client', clientEmail, amount, wallet, status:'Under Review', date:new Date(), proof:null };
-  withdrawHistory.unshift(obj);
-  res.json({success:true});
+app.get('/history',(req,res)=>res.json(emailHistory));
+app.get('/withdraw-history',(req,res)=>res.json(withdrawHistory));
+app.post('/api/client-withdraw',(req,res)=>{
+ let {clientName,clientEmail,amount,wallet}=req.body;
+ if(!amount||!wallet||!clientEmail) return res.status(400).json({error:'missing'});
+ withdrawHistory.unshift({id:Date.now(),clientName:clientName||'Client',clientEmail,amount,wallet,status:'Under Review',date:new Date(),proof:null});
+ res.json({success:true});
 });
-app.get('/api/withdraw-status', (req,res)=>{
-  const email=req.query.email;
-  res.json(withdrawHistory.filter(x=>x.clientEmail===email));
+app.post('/withdraw-proof/:id',(req,res)=>{let id=parseInt(req.params.id);let idx=withdrawHistory.findIndex(x=>x.id===id);if(idx>=0)withdrawHistory[idx].proof=req.body.proof;res.json({success:true});});
+app.post('/withdraw-approve/:id',async(req,res)=>{
+ let idx=withdrawHistory.findIndex(x=>x.id===parseInt(req.params.id)); if(idx<0) return res.status(404).json({error:'no'});
+ let w=withdrawHistory[idx]; w.status='Sent';
+ try{let att; if(w.proof) att=[{filename:'proof.jpg',content:w.proof.split(',')[1]}]; await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>',to:w.clientEmail,subject:'Withdrawal Approved $'+w.amount,html:'Hello '+w.clientName+',<br/>Your $'+w.amount+' sent to '+w.wallet+'<br/>Status: Sent',attachments:att});}catch(e){console.log(e.message)}
+ res.json({success:true});
 });
-app.post('/withdraw-proof/:id', (req,res)=>{
-  const id=parseInt(req.params.id); const i=withdrawHistory.findIndex(x=>x.id===id);
-  if(i>=0) withdrawHistory[i].proof=req.body.proof;
-  res.json({success:true});
+app.post('/withdraw-decline/:id',async(req,res)=>{
+ let idx=withdrawHistory.findIndex(x=>x.id===parseInt(req.params.id)); if(idx<0) return res.status(404).json({error:'no'});
+ withdrawHistory[idx].status='Declined';
+ try{await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>',to:withdrawHistory[idx].clientEmail,subject:'Withdrawal Declined',html:'Declined: '+(req.body.reason||'Contact support')});}catch(e){}
+ res.json({success:true});
 });
-app.post('/withdraw-approve/:id', async (req,res)=>{
-  const id=parseInt(req.params.id); const idx=withdrawHistory.findIndex(x=>x.id===id);
-  if(idx<0) return res.status(404).json({error:'not found'});
-  const w=withdrawHistory[idx]; w.status='Sent';
-  try{
-    let attachments; if(w.proof){ attachments=[{filename:'withdraw-proof.jpg', content:w.proof.split(',')[1]}]; }
-    const html = '<div style="padding:20px;background:#f4f6f9;font-family:Arial"><div style="max-width:600px;margin:0 auto;background:white;border-radius:12px"><div style="background:#0b1e3a;padding:20px;color:white">Withdrawal Approved</div><div style="padding:24px"><h3>Hello '+w.clientName+',</h3><p>Your $'+w.amount+' USDT has been sent to '+w.wallet+'</p><p style=color:#00c853><b>Status: Sent</b></p></div></div></div>';
-    await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>', to:w.clientEmail, subject:'Withdrawal Approved - $'+w.amount+' Sent', html, attachments});
-  }catch(e){console.log(e.message)}
-  res.json({success:true});
+app.post('/send-message',async(req,res)=>{
+ let {to,name,message,amount,asset}=req.body;
+ try{let data=await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>',to,subject:'BDS Notify',html:'Hello '+name+'<br/>'+(amount?amount+' '+asset+'<br/>':'')+message}); emailHistory.unshift({to,name,message,amount,asset,date:new Date()}); res.json({success:true,data});}catch(e){res.status(500).json({error:e.message})}
 });
-app.post('/withdraw-decline/:id', async (req,res)=>{
-  const id=parseInt(req.params.id); const idx=withdrawHistory.findIndex(x=>x.id===id);
-  if(idx<0) return res.status(404).json({error:'not found'});
-  const w=withdrawHistory[idx]; w.status='Declined';
-  try{
-    const html='<div style="padding:20px">Withdrawal Declined - Reason: '+(req.body.reason||'Contact support')+'</div>';
-    await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>', to:w.clientEmail, subject:'Withdrawal Declined', html});
-  }catch(e){}
-  res.json({success:true});
-});
-app.post('/send-message', async (req,res)=>{
-  const { to,name,message,amount,asset,image,imageName }=req.body;
-  const html='<div>Hello '+name+'<br/>'+(amount?'Amount: '+amount+' '+asset+'<br/>':'')+message+'</div>';
-  try{
-    const data=await resend.emails.send({from:'BDS.Philadelphia <noreply@bdsphilladelphia.online>',to,subject:'BDS NOTIFY',html, attachments: image?[{filename:imageName||'img.jpg',content:image.split(',')[1]}]:undefined});
-    emailHistory.unshift({to,name,message,amount,asset,date:new Date()});
-    res.json({success:true,data});
-  }catch(e){res.status(500).json({error:e.message})}
-});
-const PORT=process.env.PORT||10000;
-app.listen(PORT,()=>console.log('Running '+PORT));
+app.listen(process.env.PORT||10000,()=>console.log('ok'));
